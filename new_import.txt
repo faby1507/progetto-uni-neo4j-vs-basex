@@ -1,0 +1,93 @@
+
+CREATE CONSTRAINT persona_pk IF NOT EXISTS
+FOR (p:Persona) REQUIRE p.matricola IS UNIQUE;
+
+CREATE CONSTRAINT documento_pk IF NOT EXISTS
+FOR (d:Documento) REQUIRE d.id_documento IS UNIQUE;
+
+CREATE CONSTRAINT banca_pk IF NOT EXISTS
+FOR (b:Banca) REQUIRE b.id_banca IS UNIQUE;
+
+CREATE CONSTRAINT fonte_pk IF NOT EXISTS
+FOR (f:Fonte) REQUIRE f.id_fonte IS UNIQUE;
+
+CREATE CONSTRAINT transazione_pk IF NOT EXISTS
+FOR (t:Transazione) REQUIRE t.id_transazione IS UNIQUE;
+
+
+
+// PERSONE
+LOAD CSV WITH HEADERS FROM 'file:///persone.csv' AS row
+MERGE (p:Persona {matricola: row.`matricola:ID`})
+SET p.nome = row.nome,
+    p.cognome = row.cognome,
+    p.stipendio = toInteger(row.`stipendio:INT`),
+    p.id_banca = row.id_banca,
+    p.id_documento = row.id_documento,
+    p.id_fonte = row.id_fonte;
+
+// DOCUMENTI
+LOAD CSV WITH HEADERS FROM 'file:///documenti.csv' AS row
+MERGE (d:Documento {id_documento: row.`id_documento:ID`})
+SET d.nazione = row.nazione,
+    d.email = row.email,
+    d.scadenza = date(row.scadenza),
+    d.matricola = row.matricola,
+    d.num_telefono = row.num_telefono;
+
+// BANCHE (con nome)
+LOAD CSV WITH HEADERS FROM 'file:///banche.csv' AS row
+MERGE (b:Banca {id_banca: row.`id_banca:ID`})
+SET b.nome = row.nome,
+    b.nazione = row.nazione,
+    b.max_deposito = toInteger(row.`max_deposito:INT`);
+
+// FONTI (con nome)
+LOAD CSV WITH HEADERS FROM 'file:///fonti.csv' AS row
+MERGE (f:Fonte {id_fonte: row.`id_fonte:ID`})
+SET f.nome = row.nome,
+    f.nazione = row.nazione,
+    f.affidabilita = toFloat(row.`affidabilita:FLOAT`);
+
+// TRANSAZIONI (ora include id_banca_deriva)
+LOAD CSV WITH HEADERS FROM 'file:///transazioni.csv' AS row
+MERGE (t:Transazione {id_transazione: row.`id_transazione:ID`})
+SET t.importo = toInteger(row.`importo:INT`),
+    t.destinatario = row.destinatario,
+    t.data = date(row.`data:DATE`),
+    t.matricola = row.matricola,
+    t.id_banca_deriva = row.id_banca_deriva;
+
+
+
+// (Persona)-[:HA_DOCUMENTO]->(Documento)
+LOAD CSV WITH HEADERS FROM 'file:///persone.csv' AS row
+MATCH (p:Persona {matricola: row.`matricola:ID`})
+MATCH (d:Documento {id_documento: row.id_documento})
+MERGE (p)-[:HA_DOCUMENTO]->(d);
+
+// (Persona)-[:HA_BANCA]->(Banca)
+LOAD CSV WITH HEADERS FROM 'file:///persone.csv' AS row
+MATCH (p:Persona {matricola: row.`matricola:ID`})
+MATCH (b:Banca {id_banca: row.id_banca})
+MERGE (p)-[:HA_BANCA]->(b);
+
+// (Persona)-[:HA_FONTE]->(Fonte)
+LOAD CSV WITH HEADERS FROM 'file:///persone.csv' AS row
+MATCH (p:Persona {matricola: row.`matricola:ID`})
+MATCH (f:Fonte {id_fonte: row.id_fonte})
+MERGE (p)-[:HA_FONTE]->(f);
+
+// (Persona)-[:ESEGUE]->(Transazione)  (mittente -> transazione)
+LOAD CSV WITH HEADERS FROM 'file:///transazioni.csv' AS row
+MATCH (p:Persona {matricola: row.matricola})
+MATCH (t:Transazione {id_transazione: row.`id_transazione:ID`})
+MERGE (p)-[:ESEGUE]->(t);
+
+// (Banca)-[:DERIVA]->(Transazione)  (legame banca di provenienza)
+LOAD CSV WITH HEADERS FROM 'file:///transazioni.csv' AS row
+MATCH (b:Banca {id_banca: row.id_banca_deriva})
+MATCH (t:Transazione {id_transazione: row.`id_transazione:ID`})
+MERGE (b)-[:DERIVA]->(t);
+
+
